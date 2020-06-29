@@ -13,65 +13,81 @@
 # market.cndrug <- read.xlsx("02_Inputs/Market_Def_2020_CHC_0317.xlsx", sheet = "XZK-其他降脂中药")
 
 # HTN, NIAD pack
-pack.sub <- total.raw %>% 
-  mutate(flag_ta = ifelse(stri_sub(ATC4_Code, 1, 4) %in% c("C01D") | 
-                            stri_sub(ATC4_Code, 1, 3) %in% c("C03", "C07", "C08", "C09") | 
-                            Prd_desc == "CADUET             PFZ", "CV", 
-                          ifelse(stri_sub(ATC4_Code, 1, 4) %in% c("A10L", "A10H", "A10M", "A10J", 
-                                                                  "A10K", "A10S", "A10N"), "DM", 
-                                 NA))) %>% 
-  filter(!is.na(flag_ta)) %>% 
-  distinct(packid, flag_ta)
+# pack.sub <- history.servier %>% 
+#   mutate(flag_ta = ifelse(stri_sub(ATC4_Code, 1, 4) %in% c("C01D") | 
+#                             stri_sub(ATC4_Code, 1, 3) %in% c("C03", "C07", "C08", "C09") | 
+#                             Prd_desc == "CADUET             PFZ", "CV", 
+#                           ifelse(stri_sub(ATC4_Code, 1, 4) %in% c("A10L", "A10H", "A10M", "A10J", 
+#                                                                   "A10K", "A10S", "A10N"), "DM", 
+#                                  NA_character_))) %>% 
+#   filter(!is.na(flag_ta)) %>% 
+#   distinct(packid, flag_ta)
 
 # Servier sample
-servier.sample.raw <- read.xlsx("02_Inputs/07_AZ_CHC_Result.xlsx")
+az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
+colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
 
-servier.sample <- servier.sample.raw %>% 
+sh.sample <- az.history %>% 
   filter(`城市` %in% c("上海"), 
          `年季` %in% c("2019Q1")) %>% 
-  mutate(Pack_ID = stri_pad_left(Pack_ID, 7, 0)) %>% 
-  left_join(pack.sub, by = c("Pack_ID" = "packid")) %>% 
-  filter(!is.na(flag_ta)) %>% 
-  mutate(MKT = flag_ta) %>% 
+  mutate(`ATC Code IV` = if_else(Pack_ID == "Others", 
+                                 "Others", 
+                                 `ATC Code IV`), 
+         Pack_ID = if_else(Pack_ID == "Others", 
+                           Pack_ID, 
+                           stri_pad_left(Pack_ID, 7, 0))) %>% 
+  # left_join(pack.sub, by = c("Pack_ID" = "packid")) %>% 
+  # filter(!is.na(flag_ta)) %>% 
+  # mutate(MKT = ifelse(stri_sub(ATC.Code.IV, 1, 4) %in% c("C01D") | 
+  #                       stri_sub(ATC.Code.IV, 1, 3) %in% c("C03", "C07", "C08", "C09") | 
+  #                       Prd_desc == "CADUET             PFZ", "CV", 
+  #                     ifelse(stri_sub(ATC.Code.IV, 1, 4) %in% c("A10L", "A10H", "A10M", "A10J", 
+  #                                                               "A10K", "A10S", "A10N"), "DM", 
+  #                            NA_character_))) %>% 
   group_by(year = stri_sub(`年季`, 1, 4), quarter = `年季`, province = `省份`, city = `城市`, 
-           TA, atc4 = ATC.Code.IV, molecule_desc = Mole_Ename, packid = Pack_ID) %>% 
+           TA, atc4 = `ATC Code IV`, molecule_desc = Mole_Ename, packid = Pack_ID) %>% 
   summarise(units = sum(`数量（盒）`, na.rm = TRUE),
             sales = sum(`金额（元）`, na.rm = TRUE)) %>% 
   ungroup()
 
 # total substitude
-sh.sub <- total.imp %>% 
-  filter(city %in% c("上海"),
-         !(packid %in% pack.sub$packid)) %>% 
-  bind_rows(servier.sample) %>% 
-  group_by(year, quarter, province, city, TA, atc4, molecule_desc, packid) %>% 
-  summarise(units = sum(units, na.rm = TRUE),
-            sales = sum(sales, na.rm = TRUE)) %>% 
-  ungroup()
+# history.imp <- read_feather("02_Inputs/02_AZ_CHC_Inside_Imp.feather")
+
+# sh.sub <- history.imp %>% 
+#   filter(city %in% c("上海"),
+#          !(packid %in% pack.sub$packid),
+#          quarter == "2019Q1") %>% 
+#   bind_rows(servier.sample)
 
 # Beijing sample
-bj.sample <- total.imp %>% 
-  filter(city == "北京", 
-         quarter %in% c("2019Q1", "2020Q1"))
+# bj.sample <- total.imp %>% 
+#   filter(city == "北京",
+#          quarter %in% c("2020Q1"))
 
-# Shanghai sample
-sh.sample <- total.imp %>% 
-  filter(city %in% c("北京")) %>% 
-  bind_rows(sh.sub, bj.sample) %>% 
+# Shanghai growth
+sh.growth <- total.imp %>% 
+  filter(city %in% c("北京"),
+         quarter %in% c("2019Q1", "2020Q1")) %>% 
+  bind_rows(bj.sample) %>% 
   mutate(province = "上海",
          city = "上海") %>% 
   group_by(quarter, city, packid) %>% 
   summarise(sales = sum(sales, na.rm = TRUE)) %>% 
-  ungroup()
-
-# Shanghai growth
-sh.growth <- sh.sample %>% 
+  ungroup() %>% 
   spread(quarter, sales, fill = 0) %>% 
   mutate(growth_1920q1 = `2020Q1` / `2019Q1`,
-         growth_1920q1 = if_else(growth_1920q1 > 3, 1, growth_1920q1),
          quarter_pmin = pmin(`2019Q1`, `2020Q1`)) %>% 
   filter(quarter_pmin > 0) %>% 
+  mutate(growth_1920q1 = if_else(growth_1920q1 > 3, 1, growth_1920q1)) %>% 
   select(city, packid, growth_1920q1)
+
+# sh.growth <- growth.sample %>% 
+#   spread(quarter, sales, fill = 0) %>% 
+#   mutate(growth_1920q1 = `2020Q1` / `2019Q1`,
+#          quarter_pmin = pmin(`2019Q1`, `2020Q1`)) %>% 
+#   filter(quarter_pmin > 0) %>% 
+#   mutate(growth_1920q1 = if_else(growth_1920q1 > 3, 1, growth_1920q1)) %>% 
+#   select(city, packid, growth_1920q1)
 
 
 ##---- KNN model ----
@@ -133,12 +149,13 @@ weight.growth <- sh.indice %>%
 # diff
 surplus <- setdiff(sh.sample$packid[!(sh.sample$packid %in% sh.growth$packid)], ims.sales$packid)
 
-# surplus.growth <- data.frame(city = "上海",
-#                              packid = surplus) %>% 
-#   mutate(growth_1920q1 = 1)
+surplus.growth <- data.frame(city = "上海",
+                             packid = surplus) %>% 
+  mutate(growth_1920q1 = 1)
 
-sh.growth.add <- bind_rows(merge(sh.growth, 0),
-                           merge(weight.growth, 1))
+sh.growth.add <- bind_rows(merge(sh.growth, 0), 
+                           merge(weight.growth, 1), 
+                           merge(surplus.growth, 2))
   # setDT() %>% 
   # melt(id.vars = c("city", "packid"), 
   #      measure.vars = c("growth_1718q2", "growth_1718q3", "growth_1718q4", 
@@ -161,7 +178,7 @@ sh.growth.add <- bind_rows(merge(sh.growth, 0),
 
 
 ##---- Projection ----
-sh.imp <- sh.sub %>% 
+sh.imp <- sh.sample %>% 
   group_by(year, quarter, province, city, TA, atc4, molecule_desc, packid) %>% 
   summarise(units = sum(units, na.rm = TRUE),
             sales = sum(sales, na.rm = TRUE)) %>% 
@@ -172,13 +189,12 @@ sh.imp <- sh.sub %>%
   filter(units > 0, sales > 0) %>% 
   mutate(year = "2020",
          quarter = gsub("2019", "2020", quarter)) %>% 
-  group_by(year, quarter, province, city, TA, atc4, molecule_desc, packid) %>% 
+  group_by(year, quarter, province, city, TA, atc4, packid) %>% 
   summarise(units = sum(units, na.rm = TRUE),
             sales = sum(sales, na.rm = TRUE)) %>% 
   ungroup() %>% 
   mutate(price = sales / units) %>% 
-  select(year, quarter, province, city, TA, atc4, molecule_desc, 
-         packid, sales, units)
+  select(year, quarter, province, city, TA, atc4, packid, sales, units)
 
 write_feather(sh.imp, "03_Outputs/07_AZ_CHC_Shanghai.feather")
 

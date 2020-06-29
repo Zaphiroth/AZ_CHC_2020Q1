@@ -39,6 +39,17 @@ price.city <- total.imp %>%
   select(-sales, -units)
 
 
+##---- Mean price by province ----
+price.province <- total.imp %>% 
+  filter(units > 0) %>% 
+  group_by(packid, province) %>% 
+  summarise(sales = sum(sales, na.rm = TRUE),
+            units = sum(units, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(price_prov = sales / units) %>% 
+  select(-sales, -units)
+
+
 ##---- Mean price by pack ID ----
 price.pack <- total.imp %>% 
   filter(units > 0) %>% 
@@ -55,9 +66,11 @@ total.price <- total.proj %>%
   left_join(price.origin, by = c("province", "city", "year", "quarter", "packid")) %>% 
   left_join(price.year, by = c("province", "city", "year", "packid")) %>% 
   left_join(price.city, by = c("province", "city", "packid")) %>% 
+  left_join(price.province, by = c("province", "packid")) %>% 
   left_join(price.pack, by = c("packid")) %>% 
   mutate(price = ifelse(is.na(price), price_year, price),
          price = ifelse(is.na(price), price_city, price),
+         price = ifelse(is.na(price), price_prov, price),
          price = ifelse(is.na(price), price_pack, price)) %>% 
   mutate(units_update = sales / price,
          units_update = ifelse(units_update <= 0, 0, units_update)) %>% 

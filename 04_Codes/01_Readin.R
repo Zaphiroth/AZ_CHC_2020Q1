@@ -70,7 +70,8 @@ ims.mol2 <- ims_mol_lkp_ref %>%
 ims.mol <- ims.mol2 %>% 
   filter(!(packid %in% ims.mol1$packid)) %>% 
   mutate(Corp_ID = stri_pad_left(Corp_ID, 4, 0)) %>% 
-  bind_rows(ims.mol1)
+  bind_rows(ims.mol1) %>% 
+  filter(!(packid %in% c("4777502", "4777504")))
 
 # target city
 target.city <- c("北京", "上海", "杭州", "广州", "南京", "苏州", "宁波", 

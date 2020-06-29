@@ -24,51 +24,6 @@ market.info <- ta.raw %>%
   distinct(packid, `小市场`, `大市场`, `购买方式`) %>% 
   filter(!(packid == "1401802" & `小市场` == "NEB Market"))
 
-# molecule
-# ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201903_1.txt") %>% 
-#   setDF() %>% 
-#   mutate(Pack_Id = str_pad(Pack_Id, 7, "left", pad = "0")) %>% 
-#   select(Pack_Id, NFC123_Code)
-# 
-# ims.mol.raw <- read.xlsx("02_Inputs/ims_chpa_to19Q3.xlsx")
-# 
-# ims.mol1 <- ims.mol.raw[, 1:21] %>% 
-#   distinct() %>% 
-#   filter(!is.na(Pack_Id)) %>% 
-#   left_join(ims_prod_ref, by = "Pack_Id") %>% 
-#   select(packid = Pack_ID, Corp_ID, Corp_Desc, MNF_TYPE, MnfType_Desc, 
-#          Mnf_Desc, ATC4_Code, NFC123_Code, Prd_desc, Pck_Desc, 
-#          Molecule_Desc)
-# 
-# ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201903_1.txt") %>% 
-#   setDF() %>% 
-#   mutate(Pack_Id = str_pad(Pack_Id, 7, "left", pad = "0"))
-# 
-# ims_mol_lkp_ref <- fread("02_Inputs/cn_mol_lkp_201903_1.txt") %>%
-#   setDF() %>%
-#   arrange(Pack_ID, Molecule_ID) %>%
-#   mutate(Pack_ID  = str_pad(Pack_ID , 7, "left", pad = "0"))
-# 
-# ims_mol_ref <- fread("02_Inputs/cn_mol_ref_201903_1.txt")
-# 
-# ims_corp_ref <- fread("02_Inputs/cn_corp_ref_201903_1.txt")
-# 
-# ims.mol2 <- ims_mol_lkp_ref %>%
-#   left_join(ims_mol_ref, by = c("Molecule_ID" = "Molecule_Id")) %>%
-#   arrange(Pack_ID, Molecule_Desc) %>%
-#   group_by(Pack_ID) %>%
-#   summarise(Molecule_Desc = paste(Molecule_Desc, collapse = "+")) %>%
-#   ungroup() %>%
-#   left_join(ims_prod_ref, by = c("Pack_ID" = "Pack_Id")) %>%
-#   left_join(ims_corp_ref, by = "Corp_ID") %>% 
-#   select(packid = Pack_ID, Corp_ID, Corp_Desc, ATC4_Code, NFC123_Code,
-#          Prd_desc, Pck_Desc, Molecule_Desc)
-# 
-# ims.mol <- ims.mol2 %>% 
-#   filter(!(packid %in% ims.mol1$packid)) %>% 
-#   mutate(Corp_ID = stri_pad_left(Corp_ID, 4, 0)) %>% 
-#   bind_rows(ims.mol1)
-
 # product
 prod.info.raw <- read.xlsx("02_Inputs/packid_prod_20181112.xlsx")
 
@@ -78,6 +33,10 @@ prod.info <- prod.info.raw %>%
          specification = sapply(pck_desc, function(x) {
            paste(str_extract_all(x, "[0-9]{1,}[a-zA-Z]{1,}", simplify = TRUE), collapse = " ")
          }))
+
+# corp
+corp.cn <- read_xls("02_Inputs/Corp E & C name.xls") %>% 
+  distinct(Corporation, Corporation_C)
 
 # VBP flag
 vbp1 <- read.xlsx("02_Inputs/VBP匹配 for AZ CHC.xlsx", sheet = 2) %>% 
@@ -98,6 +57,21 @@ vbp3 <- read.xlsx("02_Inputs/VBP匹配 for AZ CHC.xlsx", sheet = 4) %>%
 
 
 ##---- Result ----
+# history
+az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
+colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
+
+az.history.result <- az.history %>% 
+  group_by(year = `年`, quarter = `年季`, province = `省份`, city = `城市`, TA, 
+           atc4 = `ATC Code IV`, packid = Pack_ID) %>% 
+  summarise(units = sum(`数量（盒）`, na.rm = TRUE), 
+            sales = sum(`金额（元）`, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  mutate(atc4 = if_else(packid == "Others", 
+                        "Others", 
+                        atc4))
+
+# 2020Q1
 az.cndrug <- total.price %>% 
   filter(stri_sub(packid, 1, 5) %in% market.cndrug$PROD_COD) %>% 
   group_by(year, quarter, province, city) %>% 
@@ -110,15 +84,39 @@ az.cndrug <- total.price %>%
          packid = "Others")
 
 az.chc <- total.price %>% 
-  bind_rows(sh.imp) %>% 
   filter(!(stri_sub(packid, 1, 5) %in% market.cndrug$PROD_COD)) %>% 
   group_by(year, quarter, province, city, TA, atc4, packid) %>% 
   summarise(units = sum(units, na.rm = TRUE),
             sales = sum(sales, na.rm = TRUE)) %>% 
   ungroup() %>% 
+  bind_rows(az.cndrug, sh.imp, az.history.result) %>% 
   mutate(price = sales / units) %>% 
-  bind_rows(az.cndrug) %>% 
   left_join(ims.mol, by = "packid") %>% 
+  left_join(product.info, by = c("packid" = "PACK_ID")) %>% 
+  left_join(prod.info, by = c("packid" = "pack_id")) %>% 
+  left_join(market.info, by = "packid") %>% 
+  left_join(vbp1, by = c("city", "packid")) %>% 
+  left_join(vbp2, by = c("province", "packid")) %>% 
+  left_join(vbp3, by = c("packid")) %>% 
+  left_join(corp.cn, by = c("Corp_Desc" = "Corporation")) %>% 
+  mutate(MOLE_NAME_CH = if_else(is.na(MOLE_NAME_CH), gene_name, MOLE_NAME_CH),
+         PROD_NAME_CH = if_else(is.na(PROD_NAME_CH), ims_product_cn, PROD_NAME_CH),
+         DOSAGE = if_else(is.na(DOSAGE), dosage, DOSAGE),
+         SPEC = if_else(is.na(SPEC), specification, SPEC),
+         PACK = if_else(is.na(PACK), PckSize_Desc, PACK),
+         CORP_NAME_CH = if_else(is.na(CORP_NAME_CH), ims_corp, CORP_NAME_CH),
+         VBP_Excu = ifelse(is.na(VBP_Excu1), VBP_Excu2, VBP_Excu1),
+         VBP = ifelse(is.na(VBP1), VBP2, VBP1),
+         VBP = ifelse(is.na(VBP), VBP3, VBP),
+         `单位` = NA,
+         `包装` = NA,
+         `退货数量（盒）` = 0,
+         `退货金额（元）` = 0,
+         `单支单片` = PACK * units,
+         `IMS 药品ID` = stri_paste(stri_sub(packid, 1, 5), "-", packid),
+         `IMS 药品ID` = if_else(packid == "Others", "Others", `IMS 药品ID`),
+         units = round(units),
+         sales = round(sales, 2)) %>% 
   mutate(`PPI (Oral/IV) Market` = case_when(
            Molecule_Desc %in% c("ESOMEPRAZOLE", "OMEPRAZOLE", "PANTOPRAZOLE", 
                                 "LANSOPRAZOLE", "RABEPRAZOLE") ~ 1,
@@ -337,53 +335,69 @@ az.chc <- total.price %>%
            
            TRUE ~ 0
          )) %>% 
+  select(`年` = year, `年季` = quarter, `省份` = province, `城市` = city, 
+         `标通` = MOLE_NAME_CH, PROD_DES_C = PROD_NAME_CH, `剂型` = DOSAGE, 
+         `规格` = SPEC, `转换比` = PACK, `单位`, `包装`, CORP_DES_C = Corporation_C, 
+         `购买方式`, `数量（盒）` = units, `金额（元）` = sales, `单支单片`, 
+         `价格` = price, Pack_ID = packid, `IMS 药品ID`, Mole_Ename = Molecule_Desc, 
+         Prod_Ename = Prd_desc, Corp_EName = Corp_Desc, Corp_TYPE = MNF_TYPE, 
+         `ATC Code IV` = ATC4_CODE, TA, `PPI (Oral/IV) Market`, 
+         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
+         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
+         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
+         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
+         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
+
+write_feather(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1.feather")
+write.xlsx(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1.xlsx")
+
+
+# history
+az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
+colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
+
+az.total <- bind_rows(az.history, az.chc) %>% 
+  mutate(`Non-Oral Expectorant Market` = ifelse(`剂型` %in% c("粉针剂", "雾化溶液", "吸入剂", "注射液"), 
+                                                `Non-Oral Expectorant Market`, 
+                                                0)) %>% 
+  filter(!(`PPI (Oral/IV) Market` & `Linaclotide Market` & `Symbicort Market` & 
+             `Respules (Asthma&COPD) Market` & `NEB Market` & `Non-Oral Expectorant Market` & 
+             `Betaloc Oral Market` & `Plendil Market` & `HTN Market` & `Crestor Market` & 
+             `XZK Market` & `Brilinta Market` & `Onglyza Market` & `NIAD Market` & 
+             `Forxiga(SGLT2) Market` & `IOAD Market` & `Antianemic Market` & `Lokelma Market`)) %>% 
+  select(`年`, `年季`, `省份`, `城市`, 
+         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
+         `购买方式`, `数量（盒）`, `金额（元）`, `单支单片`, 
+         `价格`, Pack_ID, `IMS 药品ID`, `PPI (Oral/IV) Market`, 
+         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
+         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
+         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
+         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
+         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
+  left_join(ims.mol, by = c("Pack_ID" = "packid")) %>% 
   left_join(product.info, by = c("packid" = "PACK_ID")) %>% 
   left_join(prod.info, by = c("packid" = "pack_id")) %>% 
   left_join(market.info, by = "packid") %>% 
-  left_join(vbp1, by = c("city", "packid")) %>% 
-  left_join(vbp2, by = c("province", "packid")) %>% 
-  left_join(vbp3, by = c("packid")) %>% 
   mutate(ATC4_CODE = if_else(is.na(ATC4_CODE), atc4_code, ATC4_CODE),
          MOLE_NAME_CH = if_else(is.na(MOLE_NAME_CH), gene_name, MOLE_NAME_CH),
          PROD_NAME_CH = if_else(is.na(PROD_NAME_CH), ims_product_cn, PROD_NAME_CH),
          DOSAGE = if_else(is.na(DOSAGE), dosage, DOSAGE),
          SPEC = if_else(is.na(SPEC), specification, SPEC),
          PACK = if_else(is.na(PACK), PckSize_Desc, PACK),
-         CORP_NAME_CH = if_else(is.na(CORP_NAME_CH), ims_corp, CORP_NAME_CH),
-         VBP_Excu = ifelse(is.na(VBP_Excu1), VBP_Excu2, VBP_Excu1),
-         VBP = ifelse(is.na(VBP1), VBP2, VBP1),
-         VBP = ifelse(is.na(VBP), VBP3, VBP),
-         `单位` = NA,
-         `包装` = NA,
-         `退货数量（盒）` = 0,
-         `退货金额（元）` = 0,
-         `单支单片` = PACK * units,
-         IMS.药品ID = stri_paste(stri_sub(packid, 1, 5), "-", packid),
-         IMS.药品ID = if_else(packid == "Others", "Others", IMS.药品ID),
-         units = round(units),
-         sales = round(sales, 2)) %>% 
-  select(`年` = year, `年月/年季` = quarter, `省份` = province, `城市` = city, 
-         `通用名` = MOLE_NAME_CH, `标通` = MOLE_NAME_CH, `商品名` = PROD_NAME_CH, 
-         `剂型` = DOSAGE, `规格` = SPEC, `转换比` = PACK, `单位`, `包装`, 
-         `生产企业` = CORP_NAME_CH, #`企业合并`, 
-         `购买方式`, `订货数量（盒）` = units, 
-         `订货金额（元）` = sales, `退货数量（盒）`, `退货金额（元）`, 
-         `金额（元）` = sales, `数量（盒）` = units, `单支单片`, `价格` = price, 
-         Pack_ID = packid, IMS.药品ID, PROD_DES_C = PROD_NAME_CH, CORP_DES_C = CORP_NAME_CH, 
-         Mole_Ename = Molecule_Desc, Prod_Ename = Prd_desc, Corp_EName = Corp_Desc, 
-         Corp_TYPE = MNF_TYPE, `ATC Code IV` = ATC4_CODE, `年季` = quarter, TA, 
-         `PPI (Oral/IV) Market`, `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
+         CORP_NAME_CH = if_else(is.na(CORP_NAME_CH), ims_corp, CORP_NAME_CH))
+  select(`年`, `年季`, `省份`, `城市`, `标通`, PROD_DES_C, `剂型`, 
+         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
+         `购买方式`, `数量（盒）`, `金额（元）`, `单支单片`, 
+         `价格`, Pack_ID, `IMS 药品ID`, 
+         Mole_Ename = Molecule_Desc, Prod_Ename = Prd_desc, 
+         Corp_EName = Corp_Desc, Corp_TYPE = MNF_TYPE, `ATC Code IV` = ATC4_Code, TA, 
+         `PPI (Oral/IV) Market`, 
+         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
          `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
          `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
-         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, `IOAD Market`, 
-         `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
-
-# history
-az.history <- read.xlsx("02_Inputs/07_AZ_CHC_Result.xlsx")
-
-az.total <- bind_rows(az.history, az.chc)
-
-write.xlsx(az.total, "03_Outputs/07_AZ_CHC_Result.xlsx")
+         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
+         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
+  arrange(`年季`, `省份`, `城市`, Pack_ID)
 
 # `通用名`, `标通`, `商品名`, `剂型`, `规格`, `转换比`, `单位`, `包装`, 
 # `生产企业`, `企业合并`, `单支单片`, IMS.药品ID, Corp_TYPE
