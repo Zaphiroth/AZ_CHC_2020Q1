@@ -68,7 +68,6 @@ sh.sample <- az.history %>%
 sh.growth <- total.imp %>% 
   filter(city %in% c("北京"),
          quarter %in% c("2019Q1", "2020Q1")) %>% 
-  bind_rows(bj.sample) %>% 
   mutate(province = "上海",
          city = "上海") %>% 
   group_by(quarter, city, packid) %>% 

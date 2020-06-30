@@ -38,6 +38,9 @@ prod.info <- prod.info.raw %>%
 corp.cn <- read_xls("02_Inputs/Corp E & C name.xls") %>% 
   distinct(Corporation, Corporation_C)
 
+# city
+city.en <- read.xlsx("02_Inputs/City_CN_EN.xlsx")
+
 # VBP flag
 vbp1 <- read.xlsx("02_Inputs/VBP匹配 for AZ CHC.xlsx", sheet = 2) %>% 
   mutate(city = gsub("市", "", `城市`),
@@ -71,6 +74,47 @@ az.history.result <- az.history %>%
                         "Others", 
                         atc4))
 
+az.history.format <- az.history %>% 
+  left_join(city.en, by = c("省份" = "Province_C", "城市" = "City_C")) %>% 
+  select(Year = `年`, YQ = `年季`, Province_C = `省份`, City_C = `城市`, 
+         Province_E, City_E, 
+         Molecule_C = `标通`, PROD_DES_C, `剂型`, 
+         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
+         `购买方式`, `Total Unit` = `数量（盒）`, `Value (RMB)` = `金额（元）`, 
+         `Counting Unit` = `单支单片`, `价格`, Pack_ID, `IMS 药品ID`, Mole_Ename, 
+         Prod_Ename, Corp_EName, Corp_TYPE, `ATC Code IV`, TA, 
+         `PPI (Oral/IV) Market`, 
+         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
+         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
+         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
+         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
+         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP) %>% 
+  setDT() %>% 
+  melt(id.vars = c('Year', 'YQ', 'Province_C', 'City_C', 'Province_E', 'City_E', 
+                   'Molecule_C', 'PROD_DES_C', '剂型', '规格', '转换比', '单位', 
+                   '包装', 'CORP_DES_C', '购买方式', 'Total Unit', 'Value (RMB)', 
+                   'Counting Unit', '价格', 'Pack_ID', 'IMS 药品ID', 
+                   'Mole_Ename', 'Prod_Ename', 'Corp_EName', 'Corp_TYPE', 
+                   'ATC Code IV', 'TA', 'VBP_Excu', 'VBP'), 
+       measure.vars = c('PPI (Oral/IV) Market', 'Linaclotide Market', 
+                        'Symbicort Market', 'Respules (Asthma&COPD) Market', 
+                        'NEB Market', 'Non-Oral Expectorant Market', 
+                        'Betaloc Oral Market', 'Plendil Market', 'HTN Market', 
+                        'Crestor Market', 'XZK Market', 'Brilinta Market', 
+                        'Onglyza Market', 'NIAD Market', 'Forxiga(SGLT2) Market', 
+                        'IOAD Market', 'Antianemic Market', 'Lokelma Market'), 
+       variable.name = "Market", 
+       value.name = "flag", 
+       variable.factor = FALSE) %>% 
+  filter(flag == 1) %>% 
+  select(Market, Year, YQ, Province_C, City_C, Province_E, City_E, Molecule_C, 
+         PROD_DES_C, `剂型`, `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
+         `购买方式`, `Total Unit`, `Value (RMB)`, `Counting Unit`, `价格`, 
+         Pack_ID, `IMS 药品ID`, Mole_Ename, Prod_Ename, Corp_EName, Corp_TYPE, 
+         `ATC Code IV`, TA, VBP_Excu, VBP)
+
+write.xlsx(az.history.format, "03_Outputs/AZ_CHC_2017Q1_2019Q4_Delivery_Format.xlsx")
+
 # 2020Q1
 az.cndrug <- total.price %>% 
   filter(stri_sub(packid, 1, 5) %in% market.cndrug$PROD_COD) %>% 
@@ -99,6 +143,7 @@ az.chc <- total.price %>%
   left_join(vbp2, by = c("province", "packid")) %>% 
   left_join(vbp3, by = c("packid")) %>% 
   left_join(corp.cn, by = c("Corp_Desc" = "Corporation")) %>% 
+  left_join(city.en, by = c("province" = "Province_C", "city" = "City_C")) %>% 
   mutate(MOLE_NAME_CH = if_else(is.na(MOLE_NAME_CH), gene_name, MOLE_NAME_CH),
          PROD_NAME_CH = if_else(is.na(PROD_NAME_CH), ims_product_cn, PROD_NAME_CH),
          DOSAGE = if_else(is.na(DOSAGE), dosage, DOSAGE),
@@ -110,9 +155,7 @@ az.chc <- total.price %>%
          VBP = ifelse(is.na(VBP), VBP3, VBP),
          `单位` = NA,
          `包装` = NA,
-         `退货数量（盒）` = 0,
-         `退货金额（元）` = 0,
-         `单支单片` = PACK * units,
+         `Counting Unit` = PACK * units,
          `IMS 药品ID` = stri_paste(stri_sub(packid, 1, 5), "-", packid),
          `IMS 药品ID` = if_else(packid == "Others", "Others", `IMS 药品ID`),
          units = round(units),
@@ -335,10 +378,11 @@ az.chc <- total.price %>%
            
            TRUE ~ 0
          )) %>% 
-  select(`年` = year, `年季` = quarter, `省份` = province, `城市` = city, 
-         `标通` = MOLE_NAME_CH, PROD_DES_C = PROD_NAME_CH, `剂型` = DOSAGE, 
+  select(Year = year, YQ = quarter, Province_C = province, City_C = city, 
+         Province_E, City_E, 
+         Molecule_C = MOLE_NAME_CH, PROD_DES_C = PROD_NAME_CH, `剂型` = DOSAGE, 
          `规格` = SPEC, `转换比` = PACK, `单位`, `包装`, CORP_DES_C = Corporation_C, 
-         `购买方式`, `数量（盒）` = units, `金额（元）` = sales, `单支单片`, 
+         `购买方式`, `Total Unit` = units, `Value (RMB)` = sales, `Counting Unit`, 
          `价格` = price, Pack_ID = packid, `IMS 药品ID`, Mole_Ename = Molecule_Desc, 
          Prod_Ename = Prd_desc, Corp_EName = Corp_Desc, Corp_TYPE = MNF_TYPE, 
          `ATC Code IV` = ATC4_CODE, TA, `PPI (Oral/IV) Market`, 
@@ -346,64 +390,45 @@ az.chc <- total.price %>%
          `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
          `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
          `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
-         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
+         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP) %>% 
+  mutate(`Non-Oral Expectorant Market` = 
+           ifelse(`剂型` %in% c("粉针剂", "雾化溶液", "吸入剂", "注射液"), 
+                  `Non-Oral Expectorant Market`, 
+                  0)) %>% 
+  setDT() %>% 
+  melt(id.vars = c('Year', 'YQ', 'Province_C', 'City_C', 'Province_E', 'City_E', 
+                   'Molecule_C', 'PROD_DES_C', '剂型', '规格', '转换比', '单位', 
+                   '包装', 'CORP_DES_C', '购买方式', 'Total Unit', 'Value (RMB)', 
+                   'Counting Unit', '价格', 'Pack_ID', 'IMS 药品ID', 
+                   'Mole_Ename', 'Prod_Ename', 'Corp_EName', 'Corp_TYPE', 
+                   'ATC Code IV', 'TA', 'VBP_Excu', 'VBP'), 
+       measure.vars = c('PPI (Oral/IV) Market', 'Linaclotide Market', 
+                        'Symbicort Market', 'Respules (Asthma&COPD) Market', 
+                        'NEB Market', 'Non-Oral Expectorant Market', 
+                        'Betaloc Oral Market', 'Plendil Market', 'HTN Market', 
+                        'Crestor Market', 'XZK Market', 'Brilinta Market', 
+                        'Onglyza Market', 'NIAD Market', 'Forxiga(SGLT2) Market', 
+                        'IOAD Market', 'Antianemic Market', 'Lokelma Market'), 
+       variable.name = "Market", 
+       value.name = "flag", 
+       variable.factor = FALSE) %>% 
+  filter(flag == 1) %>% 
+  select(Market, Year, YQ, Province_C, City_C, Province_E, City_E, Molecule_C, 
+         PROD_DES_C, `剂型`, `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
+         `购买方式`, `Total Unit`, `Value (RMB)`, `Counting Unit`, `价格`, 
+         Pack_ID, `IMS 药品ID`, Mole_Ename, Prod_Ename, Corp_EName, Corp_TYPE, 
+         `ATC Code IV`, TA, VBP_Excu, VBP)
 
-write_feather(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1.feather")
-write.xlsx(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1.xlsx")
-
-
-# history
-az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
-colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
-
-az.total <- bind_rows(az.history, az.chc) %>% 
-  mutate(`Non-Oral Expectorant Market` = ifelse(`剂型` %in% c("粉针剂", "雾化溶液", "吸入剂", "注射液"), 
-                                                `Non-Oral Expectorant Market`, 
-                                                0)) %>% 
-  filter(!(`PPI (Oral/IV) Market` & `Linaclotide Market` & `Symbicort Market` & 
-             `Respules (Asthma&COPD) Market` & `NEB Market` & `Non-Oral Expectorant Market` & 
-             `Betaloc Oral Market` & `Plendil Market` & `HTN Market` & `Crestor Market` & 
-             `XZK Market` & `Brilinta Market` & `Onglyza Market` & `NIAD Market` & 
-             `Forxiga(SGLT2) Market` & `IOAD Market` & `Antianemic Market` & `Lokelma Market`)) %>% 
-  select(`年`, `年季`, `省份`, `城市`, 
-         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
-         `购买方式`, `数量（盒）`, `金额（元）`, `单支单片`, 
-         `价格`, Pack_ID, `IMS 药品ID`, `PPI (Oral/IV) Market`, 
-         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
-         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
-         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
-         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
-         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
-  left_join(ims.mol, by = c("Pack_ID" = "packid")) %>% 
-  left_join(product.info, by = c("packid" = "PACK_ID")) %>% 
-  left_join(prod.info, by = c("packid" = "pack_id")) %>% 
-  left_join(market.info, by = "packid") %>% 
-  mutate(ATC4_CODE = if_else(is.na(ATC4_CODE), atc4_code, ATC4_CODE),
-         MOLE_NAME_CH = if_else(is.na(MOLE_NAME_CH), gene_name, MOLE_NAME_CH),
-         PROD_NAME_CH = if_else(is.na(PROD_NAME_CH), ims_product_cn, PROD_NAME_CH),
-         DOSAGE = if_else(is.na(DOSAGE), dosage, DOSAGE),
-         SPEC = if_else(is.na(SPEC), specification, SPEC),
-         PACK = if_else(is.na(PACK), PckSize_Desc, PACK),
-         CORP_NAME_CH = if_else(is.na(CORP_NAME_CH), ims_corp, CORP_NAME_CH))
-  select(`年`, `年季`, `省份`, `城市`, `标通`, PROD_DES_C, `剂型`, 
-         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
-         `购买方式`, `数量（盒）`, `金额（元）`, `单支单片`, 
-         `价格`, Pack_ID, `IMS 药品ID`, 
-         Mole_Ename = Molecule_Desc, Prod_Ename = Prd_desc, 
-         Corp_EName = Corp_Desc, Corp_TYPE = MNF_TYPE, `ATC Code IV` = ATC4_Code, TA, 
-         `PPI (Oral/IV) Market`, 
-         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
-         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
-         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
-         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
-         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP)
-  arrange(`年季`, `省份`, `城市`, Pack_ID)
-
-# `通用名`, `标通`, `商品名`, `剂型`, `规格`, `转换比`, `单位`, `包装`, 
-# `生产企业`, `企业合并`, `单支单片`, IMS.药品ID, Corp_TYPE
+write_feather(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1_Delivery_Format.feather")
+write.xlsx(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1_Delivery_Format.xlsx")
 
 
-
+# `PPI (Oral/IV) Market`, 
+# `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
+# `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
+# `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
+# `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
+# `IOAD Market`, `Antianemic Market`, `Lokelma Market`, 
 
 
 
