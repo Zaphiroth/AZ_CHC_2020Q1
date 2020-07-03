@@ -59,63 +59,7 @@ vbp3 <- read.xlsx("02_Inputs/VBP匹配 for AZ CHC.xlsx", sheet = 4) %>%
   select(packid, VBP3 = VBP)
 
 
-##---- Result ----
-# history
-az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
-colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
-
-az.history.result <- az.history %>% 
-  group_by(year = `年`, quarter = `年季`, province = `省份`, city = `城市`, TA, 
-           atc4 = `ATC Code IV`, packid = Pack_ID) %>% 
-  summarise(units = sum(`数量（盒）`, na.rm = TRUE), 
-            sales = sum(`金额（元）`, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  mutate(atc4 = if_else(packid == "Others", 
-                        "Others", 
-                        atc4))
-
-az.history.format <- az.history %>% 
-  left_join(city.en, by = c("省份" = "Province_C", "城市" = "City_C")) %>% 
-  select(Year = `年`, YQ = `年季`, Province_C = `省份`, City_C = `城市`, 
-         Province_E, City_E, 
-         Molecule_C = `标通`, PROD_DES_C, `剂型`, 
-         `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
-         `购买方式`, `Total Unit` = `数量（盒）`, `Value (RMB)` = `金额（元）`, 
-         `Counting Unit` = `单支单片`, `价格`, Pack_ID, `IMS 药品ID`, Mole_Ename, 
-         Prod_Ename, Corp_EName, Corp_TYPE, `ATC Code IV`, TA, 
-         `PPI (Oral/IV) Market`, 
-         `Linaclotide Market`, `Symbicort Market`, `Respules (Asthma&COPD) Market`, 
-         `NEB Market`, `Non-Oral Expectorant Market`, `Betaloc Oral Market`, 
-         `Plendil Market`, `HTN Market`, `Crestor Market`, `XZK Market`, 
-         `Brilinta Market`, `Onglyza Market`, `NIAD Market`, `Forxiga(SGLT2) Market`, 
-         `IOAD Market`, `Antianemic Market`, `Lokelma Market`, VBP_Excu, VBP) %>% 
-  setDT() %>% 
-  melt(id.vars = c('Year', 'YQ', 'Province_C', 'City_C', 'Province_E', 'City_E', 
-                   'Molecule_C', 'PROD_DES_C', '剂型', '规格', '转换比', '单位', 
-                   '包装', 'CORP_DES_C', '购买方式', 'Total Unit', 'Value (RMB)', 
-                   'Counting Unit', '价格', 'Pack_ID', 'IMS 药品ID', 
-                   'Mole_Ename', 'Prod_Ename', 'Corp_EName', 'Corp_TYPE', 
-                   'ATC Code IV', 'TA', 'VBP_Excu', 'VBP'), 
-       measure.vars = c('PPI (Oral/IV) Market', 'Linaclotide Market', 
-                        'Symbicort Market', 'Respules (Asthma&COPD) Market', 
-                        'NEB Market', 'Non-Oral Expectorant Market', 
-                        'Betaloc Oral Market', 'Plendil Market', 'HTN Market', 
-                        'Crestor Market', 'XZK Market', 'Brilinta Market', 
-                        'Onglyza Market', 'NIAD Market', 'Forxiga(SGLT2) Market', 
-                        'IOAD Market', 'Antianemic Market', 'Lokelma Market'), 
-       variable.name = "Market", 
-       value.name = "flag", 
-       variable.factor = FALSE) %>% 
-  filter(flag == 1) %>% 
-  select(Market, Year, YQ, Province_C, City_C, Province_E, City_E, Molecule_C, 
-         PROD_DES_C, `剂型`, `规格`, `转换比`, `单位`, `包装`, CORP_DES_C, 
-         `购买方式`, `Total Unit`, `Value (RMB)`, `Counting Unit`, `价格`, 
-         Pack_ID, `IMS 药品ID`, Mole_Ename, Prod_Ename, Corp_EName, Corp_TYPE, 
-         `ATC Code IV`, TA, VBP_Excu, VBP)
-
-write.xlsx(az.history.format, "03_Outputs/AZ_CHC_2017Q1_2019Q4_Delivery_Format.xlsx")
-
-# 2020Q1
+##---- 2020Q1 result ----
 az.cndrug <- total.price %>% 
   filter(stri_sub(packid, 1, 5) %in% market.cndrug$PROD_COD) %>% 
   group_by(year, quarter, province, city) %>% 
@@ -123,7 +67,7 @@ az.cndrug <- total.price %>%
             sales = sum(sales, na.rm = TRUE)) %>% 
   ungroup() %>% 
   mutate(price = sales / units,
-         TA = "Others",
+         TA = "CV",
          atc4 = "Others",
          packid = "Others")
 
@@ -394,7 +338,8 @@ az.chc <- total.price %>%
   mutate(`Non-Oral Expectorant Market` = 
            ifelse(`剂型` %in% c("粉针剂", "雾化溶液", "吸入剂", "注射液"), 
                   `Non-Oral Expectorant Market`, 
-                  0)) %>% 
+                  0),
+         Mole_Ename = if_else(Pack_ID == 'Others', 'Others', Mole_Ename)) %>% 
   setDT() %>% 
   melt(id.vars = c('Year', 'YQ', 'Province_C', 'City_C', 'Province_E', 'City_E', 
                    'Molecule_C', 'PROD_DES_C', '剂型', '规格', '转换比', '单位', 
