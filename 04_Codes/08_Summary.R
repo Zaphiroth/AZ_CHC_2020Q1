@@ -20,9 +20,16 @@ product.info <- read.xlsx("02_Inputs/Product standardization master data-A-S-031
 # renal.market <- distinct(renal.raw, packid, `小市场`, `大市场`, `购买方式`)
 
 # market
-market.info <- ta.raw %>% 
-  distinct(packid, `小市场`, `大市场`, `购买方式`) %>% 
+ta.raw.history <- read_feather('02_Inputs/01_AZ_CHC_Raw_with_TA.feather')
+
+market.info <- ta.raw.history %>% 
+  select(-`小市场`, -`大市场`, -`购买方式`) %>% 
+  left_join(market.mapping, by = 'flag_mkt') %>% 
+  bind_rows(ta.raw) %>% 
+  distinct(packid, TA, `小市场`, `大市场`, `购买方式`) %>% 
   filter(!(packid == "1401802" & `小市场` == "NEB Market"))
+
+write.xlsx(market.info, '03_Outputs/Market_Info_20200703.xlsx')
 
 # product
 prod.info.raw <- read.xlsx("02_Inputs/packid_prod_20181112.xlsx")
@@ -82,7 +89,7 @@ az.chc <- total.price %>%
   left_join(ims.mol, by = "packid") %>% 
   left_join(product.info, by = c("packid" = "PACK_ID")) %>% 
   left_join(prod.info, by = c("packid" = "pack_id")) %>% 
-  left_join(market.info, by = "packid") %>% 
+  left_join(market.info, by = c("TA", "packid")) %>% 
   left_join(vbp1, by = c("city", "packid")) %>% 
   left_join(vbp2, by = c("province", "packid")) %>% 
   left_join(vbp3, by = c("packid")) %>% 
@@ -376,5 +383,11 @@ write.xlsx(az.chc, "03_Outputs/08_AZ_CHC_2017Q1_2020Q1_Delivery_Format.xlsx")
 # `IOAD Market`, `Antianemic Market`, `Lokelma Market`, 
 
 
+bi.chk <- az.chc %>% 
+  filter(PROD_DES_C %in% c('爱通立', '沐舒坦', '泰毕全', '森福罗', '爱全乐', 
+                           '思力华', '欧唐静', '欧唐宁'), 
+         Year %in% c('2017', '2018', '2019')) %>% 
+  select(-Market) %>% 
+  distinct()
 
-
+write.xlsx(bi.chk, '03_Outputs/CHC_2017_to_2019_BI.xlsx')

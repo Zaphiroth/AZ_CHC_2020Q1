@@ -58,7 +58,7 @@ universe.set <- merge(distinct(hospital.universe, pchc, seg, est),
   merge(distinct(proj.raw, province, city, TA, atc4, molecule_desc, packid)) %>% 
   data.frame(stringsAsFactors = FALSE) %>% 
   mutate(seg = ifelse(is.na(seg), 1, seg),
-         panel = ifelse(pchc %in% unique(ta.raw$pchc), 1, 0),
+         panel = ifelse(pchc %in% unique(total.raw$pchc), 1, 0),
          panel = ifelse(is.na(est), 0, panel))
 
 filtered.set <- universe.set %>% 

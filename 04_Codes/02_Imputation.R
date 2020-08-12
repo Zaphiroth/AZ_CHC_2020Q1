@@ -8,7 +8,7 @@
 
 ##---- Imputing inside existing provinces ----
 # quarterly date continuity
-date.continuity <- ta.raw %>% 
+date.continuity <- total.raw %>% 
   distinct(province, city, pchc, TA, year, date) %>% 
   count(province, city, pchc, TA, year) %>% 
   setDT() %>% 
@@ -19,7 +19,7 @@ date.continuity <- ta.raw %>%
 # city molecule yearly growth
 city.growth <- date.continuity %>% 
   filter(cnt_min >= 2) %>% 
-  inner_join(ta.raw, by = c("province", "city", "pchc", "TA")) %>% 
+  inner_join(total.raw, by = c("province", "city", "pchc", "TA")) %>% 
   group_by(province, city, year, TA, atc4, molecule_desc) %>% 
   summarise(sales = sum(sales, na.rm = TRUE),
             units = sum(units, na.rm = TRUE)) %>% 
@@ -40,7 +40,7 @@ city.growth <- date.continuity %>%
 imputing.data <- date.continuity %>% 
   filter(cnt_max >= 2) %>% 
   select(province, city, pchc, TA) %>% 
-  left_join(ta.raw, by = c("province", "city", "pchc", "TA")) %>% 
+  left_join(total.raw, by = c("province", "city", "pchc", "TA")) %>% 
   mutate(month = stri_sub(date, 5, 6)) %>% 
   setDT() %>% 
   melt(id.vars = c("province", "city", "pchc", "year", "month", "TA", "atc4", "molecule_desc", "packid"),
@@ -72,7 +72,7 @@ imputing.data <- date.continuity %>%
          packid, units_imp, sales_imp, flag)
 
 # result
-total.in.imp <- ta.raw %>% 
+total.in.imp <- total.raw %>% 
   full_join(imputing.data, by = c("year", "date", "quarter", "province", "city", "pchc", 
                                   "TA", "atc4", "molecule_desc", "packid")) %>% 
   mutate(units = if_else(is.na(units), units_imp, units),

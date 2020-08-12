@@ -28,7 +28,7 @@ pchc.mapping3 <- pchc.mapping1 %>%
   ungroup()
 
 # molecule
-ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201912_1.txt") %>% 
+ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201903_1.txt") %>% 
   setDF() %>% 
   mutate(Pack_Id = str_pad(Pack_Id, 7, "left", pad = "0")) %>% 
   select(Pack_Id, NFC123_Code)
@@ -43,18 +43,18 @@ ims.mol1 <- ims.mol.raw[, 1:21] %>%
          Mnf_Desc, ATC4_Code, NFC123_Code, Prd_desc, Pck_Desc, 
          Molecule_Desc)
 
-ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201912_1.txt") %>% 
+ims_prod_ref <- fread("02_Inputs/cn_prod_ref_201903_1.txt") %>% 
   setDF() %>% 
   mutate(Pack_Id = str_pad(Pack_Id, 7, "left", pad = "0"))
 
-ims_mol_lkp_ref <- fread("02_Inputs/cn_mol_lkp_201912_1.txt") %>%
+ims_mol_lkp_ref <- fread("02_Inputs/cn_mol_lkp_201903_1.txt") %>%
   setDF() %>%
   arrange(Pack_ID, Molecule_ID) %>%
   mutate(Pack_ID  = str_pad(Pack_ID , 7, "left", pad = "0"))
 
-ims_mol_ref <- fread("02_Inputs/cn_mol_ref_201912_1.txt")
+ims_mol_ref <- fread("02_Inputs/cn_mol_ref_201903_1.txt")
 
-ims_corp_ref <- fread("02_Inputs/cn_corp_ref_201912_1.txt")
+ims_corp_ref <- fread("02_Inputs/cn_corp_ref_201903_1.txt")
 
 ims.mol2 <- ims_mol_lkp_ref %>%
   left_join(ims_mol_ref, by = c("Molecule_ID" = "Molecule_Id")) %>%
@@ -171,7 +171,10 @@ market.mapping.raw <- read.xlsx("02_Inputs/Market_Def_2020_CHC_0317.xlsx", sheet
 
 market.mapping <- market.mapping.raw[, -1] %>% 
   select(`小市场`, `大市场`, `购买方式`, flag_mkt = flag) %>% 
-  distinct()
+  distinct() %>% 
+  group_by(`小市场`) %>% 
+  mutate(`购买方式` = paste(unique(`购买方式`), collapse = "+")) %>% 
+  ungroup()
 
 market.cndrug <- read.xlsx("02_Inputs/Market_Def_2020_CHC_0317.xlsx", sheet = "XZK-其他降脂中药")
 
@@ -390,7 +393,7 @@ cv.raw3 <- total.raw %>%
     
     TRUE ~ 0
   )) %>% 
-  filter(flag_mkt != 0, year %in% c("2017", "2018")) %>% 
+  filter(flag_mkt != 0) %>% 
   mutate(TA = "CV") %>% 
   group_by(year, date, quarter, province, city, pchc, TA, 
            atc4 = ATC4_Code, molecule_desc = Molecule_Desc, packid, flag_mkt) %>% 
@@ -400,30 +403,30 @@ cv.raw3 <- total.raw %>%
   left_join(market.mapping, by = "flag_mkt") %>% 
   filter(!(packid %in% unique(c(cv.raw1$packid, cv.raw2$packid))))
 
-cv.raw4 <- total.raw %>% 
-  mutate(flag_mkt = case_when(
-    ATC4_Code == "C10A1" ~ 14,
-    
-    Prd_desc %in% c("CADUET             PFZ", "VYTORIN            MSD", 
-                    "EZETROL            SG7") ~ 15,
-    
-    Molecule_Desc %in% c("ATORVASTATIN", "ROSUVASTATIN", "SIMVASTATIN", 
-                         "PITAVASTATIN", "PRAVASTATIN", "FLUVASTATIN", 
-                         "EZETIMIBE", "LOVASTATIN", "EZETIMIBE+SIMVASTATIN") ~ 17,
-    
-    TRUE ~ 0
-  )) %>% 
-  filter(flag_mkt != 0, year %in% c("2019")) %>% 
-  mutate(TA = "CV") %>% 
-  group_by(year, date, quarter, province, city, pchc, TA, 
-           atc4 = ATC4_Code, molecule_desc = Molecule_Desc, packid, flag_mkt) %>% 
-  summarise(units = sum(units, na.rm = TRUE),
-            sales = sum(sales, na.rm = TRUE)) %>% 
-  ungroup() %>% 
-  left_join(market.mapping, by = "flag_mkt") %>% 
-  filter(!(packid %in% unique(c(cv.raw1$packid, cv.raw2$packid))))
+# cv.raw4 <- total.raw %>% 
+#   mutate(flag_mkt = case_when(
+#     ATC4_Code == "C10A1" ~ 14,
+#     
+#     Prd_desc %in% c("CADUET             PFZ", "VYTORIN            MSD", 
+#                     "EZETROL            SG7") ~ 15,
+#     
+#     Molecule_Desc %in% c("ATORVASTATIN", "ROSUVASTATIN", "SIMVASTATIN", 
+#                          "PITAVASTATIN", "PRAVASTATIN", "FLUVASTATIN", 
+#                          "EZETIMIBE", "LOVASTATIN", "EZETIMIBE+SIMVASTATIN") ~ 17,
+#     
+#     TRUE ~ 0
+#   )) %>% 
+#   filter(flag_mkt != 0, year %in% c("2019")) %>% 
+#   mutate(TA = "CV") %>% 
+#   group_by(year, date, quarter, province, city, pchc, TA, 
+#            atc4 = ATC4_Code, molecule_desc = Molecule_Desc, packid, flag_mkt) %>% 
+#   summarise(units = sum(units, na.rm = TRUE),
+#             sales = sum(sales, na.rm = TRUE)) %>% 
+#   ungroup() %>% 
+#   left_join(market.mapping, by = "flag_mkt") %>% 
+#   filter(!(packid %in% unique(c(cv.raw1$packid, cv.raw2$packid))))
 
-cv.raw <- bind_rows(cv.raw1, cv.raw2, cv.raw3, cv.raw4)
+cv.raw <- bind_rows(cv.raw1, cv.raw2, cv.raw3)
 
 # DM
 dm.raw <- total.raw %>% 

@@ -132,3 +132,33 @@ az.result <- bind_rows(az.history.format, az.20q1.format)
 
 write.xlsx(az.result, '03_Outputs/AZ_CHC_2017Q1_2020Q1_Delivery_Format.xlsx')
 
+
+##---- 购买方式 ----
+az.total1 <- read.xlsx('02_Inputs/AZ_CHC_2017Q1_2020Q1_0703.xlsx', sheet = 2)
+colnames(az.total1) <- gsub("[.]", " ", colnames(az.total1))
+
+market.info1 <- distinct(market.mapping, Market = `小市场`, `购买方式`) %>% 
+  bind_rows(distinct(market.mapping, Market = `大市场`, `购买方式`)) %>% 
+  filter(!is.na(Market))
+
+az.result1 <- az.total1 %>% 
+  select(-`购买方式`) %>% 
+  left_join(market.info1, by = 'Market') %>% 
+  select(Market, Year, YQ, Province_C, City_C, Province_E, City_E, Molecule_C, 
+         PROD_DES_C, `剂型`, `规格`, `转换比`, `单位`, Pack_DESC, 
+         CORP_DES_C, `购买方式`, `Total Unit`, `Value (RMB)`, `Counting Unit`, 
+         `价格`, Pack_ID, `IMS 药品ID`, Mole_Ename, Prod_Ename, Corp_EName, 
+         Corp_TYPE, `ATC Code IV`, TA, VBP_Excu, VBP)
+
+write.xlsx(az.result1, '03_Outputs/AZ_CHC_2017Q1_2020Q1_0703v2.xlsx')
+
+
+
+
+
+
+
+
+
+
+
