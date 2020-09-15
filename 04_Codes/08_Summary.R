@@ -261,7 +261,7 @@ az.chc <- total.price %>%
            TRUE ~ 0
          ),
          `HTN Market` = case_when(
-           stri_sub(ATC4_Code, 1, 4) %in% c("C01D") ~ 1,
+           # stri_sub(ATC4_Code, 1, 4) %in% c("C01D") ~ 1,
            
            stri_sub(ATC4_Code, 1, 3) %in% c("C03", "C07", "C08", "C09") ~ 1,
            

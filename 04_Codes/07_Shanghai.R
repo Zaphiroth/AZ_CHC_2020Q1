@@ -23,7 +23,7 @@
 #   filter(!is.na(flag_ta)) %>% 
 #   distinct(packid, flag_ta)
 
-# Servier sample
+# AZ sample
 az.history <- read.xlsx("02_Inputs/AZ_CHC_2017Q1_2019Q4_Delivery_Final_0610（HTN+Crestor Market）.xlsx")
 colnames(az.history) <- gsub("[.]", " ", colnames(az.history))
 
