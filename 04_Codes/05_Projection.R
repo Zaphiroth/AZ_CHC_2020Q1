@@ -41,7 +41,7 @@ proj.raw <- total.imp %>%
 
 # quarter sales
 proj.quarter <- proj.raw %>% 
-  group_by(quarter, province, city, pchc, TA, atc4, molecule_desc, packid) %>% 
+  group_by(quarter, province, city, pchc, atc4, molecule_desc, packid) %>% 
   summarise(panel_sales = sum(sales, na.rm = TRUE)) %>% 
   ungroup()
 
@@ -55,7 +55,7 @@ proj.price <- proj.raw %>%
 # universe set
 universe.set <- merge(distinct(hospital.universe, pchc, seg, est), 
                       distinct(proj.raw, quarter)) %>% 
-  merge(distinct(proj.raw, province, city, TA, atc4, molecule_desc, packid)) %>% 
+  merge(distinct(proj.raw, province, city, atc4, molecule_desc, packid)) %>% 
   data.frame(stringsAsFactors = FALSE) %>% 
   mutate(seg = ifelse(is.na(seg), 1, seg),
          panel = ifelse(pchc %in% unique(total.raw$pchc), 1, 0),
@@ -64,7 +64,7 @@ universe.set <- merge(distinct(hospital.universe, pchc, seg, est),
 filtered.set <- universe.set %>% 
   filter(panel == 1) %>% 
   left_join(proj.quarter, by = c("province", "city", "pchc", "quarter", 
-                                 "TA", "atc4", "molecule_desc", "packid")) %>% 
+                                 "atc4", "molecule_desc", "packid")) %>% 
   mutate(panel_sales = ifelse(is.na(panel_sales), 0, panel_sales))
 
 # projection parameter
@@ -76,7 +76,7 @@ proj.parm <- data.table(filtered.set)[, {
   predict_sales <- slope * est
   spearman_cor <- cor(panel_sales, predict_sales, method = "spearman")
   list(slope = slope, intercept = intercept, spearman_cor = spearman_cor)
-}, by = list(city, quarter, packid, TA, seg)]
+}, by = list(city, quarter, packid, seg)]
 
 # QC: TRUE is no multiple match
 sum(universe.set$panel_sales, na.rm = TRUE) <= sum(proj.quarter$panel_sales, na.rm = TRUE)
@@ -85,14 +85,14 @@ sum(universe.set$panel_sales, na.rm = TRUE) <= sum(proj.quarter$panel_sales, na.
 ##---- Result ----
 proj.result <- universe.set %>% 
   left_join(proj.quarter, by = c("province", "city", "pchc", "quarter", 
-                                 "TA", "molecule_desc", "atc4", "packid")) %>% 
+                                 "molecule_desc", "atc4", "packid")) %>% 
   mutate(panel_sales = ifelse(is.na(panel_sales), 0, panel_sales)) %>% 
-  left_join(proj.parm, by = c("quarter", "city", "TA", "packid", "seg")) %>% 
+  left_join(proj.parm, by = c("quarter", "city", "packid", "seg")) %>% 
   mutate(predict_sales = est * slope + intercept,
          final_sales = ifelse(panel == 0, predict_sales, panel_sales)) %>% 
   filter(final_sales > 0) %>% 
   mutate(year = stri_sub(quarter, 1, 4)) %>% 
-  group_by(year, quarter, province, city, pchc, TA, atc4, molecule_desc, packid) %>% 
+  group_by(year, quarter, province, city, pchc, atc4, molecule_desc, packid) %>% 
   summarise(sales = sum(final_sales, na.rm = TRUE)) %>% 
   ungroup() %>% 
   filter(city %in% c("北京"))
@@ -100,7 +100,7 @@ proj.result <- universe.set %>%
 total.proj <- total.imp %>% 
   filter(city %in% c("广州"), quarter %in% c("2020Q1")) %>% 
   bind_rows(proj.result) %>% 
-  group_by(year, quarter, province, city, pchc, TA, atc4, molecule_desc, packid) %>% 
+  group_by(year, quarter, province, city, pchc, atc4, molecule_desc, packid) %>% 
   summarise(sales = sum(sales, na.rm = TRUE)) %>% 
   ungroup()
 

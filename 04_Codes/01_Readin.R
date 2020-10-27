@@ -160,7 +160,8 @@ total.raw <- bind_rows(gd.2020q1, bj.2020q1, sh.2020q1,
   left_join(ims.mol, by = "packid") %>% 
   select(year, date, quarter, province, city, district, pchc, packid, 
          units, sales, Corp_ID, Corp_Desc, MNF_TYPE, MnfType_Desc, 
-         Mnf_Desc, ATC4_Code, NFC123_Code, Prd_desc, Pck_Desc, Molecule_Desc)
+         Mnf_Desc, atc4 = ATC4_Code, NFC123_Code, Prd_desc, Pck_Desc, 
+         molecule_desc = Molecule_Desc)
 
 write_feather(total.raw, "03_Outputs/01_AZ_CHC_Total_Raw.feather")
 
